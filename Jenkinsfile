@@ -4,7 +4,7 @@ pipeline{
     environment{
         DOCKER_IMAGE = "nileshdhakane/flask-app1"
         DOCKER_TAG = "latest"
-        KUBECONFIG = "/var/lib/jenkins/.kube/config"
+        
     }
 
     stages{
@@ -17,12 +17,18 @@ pipeline{
             }
         }
         stage('Build the image'){
-            steps{
-                script{
-                    sh """
-                            docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .
-                       """
-                }
+             environment {
+                DOCKER_BUILDKIT = '1'
+            }
+            steps {
+                sh """
+                docker buildx create --use || true
+                docker buildx build \
+                --platform linux/amd64 \
+                -t ${DOCKER_IMAGE}:${DOCKER_TAG} \
+                -t ${DOCKER_IMAGE}:latest \
+                --load .
+                """
             }
         }
         stage('login to dockerhub'){
@@ -46,11 +52,15 @@ pipeline{
             steps{
                  sh """
                 docker push ${DOCKER_IMAGE}:${DOCKER_TAG}
+                docker push ${DOCKER_IMAGE}:latest
                 """
             }
         
         }
         stage('Deploy on local minikube'){
+            environment{
+                KUBECONFIG = "/var/lib/jenkins/.kube/config"
+            }
             steps{
                  sh """
                 kubectl apply -f k8s/deployment.yaml
